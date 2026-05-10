@@ -37,7 +37,7 @@ jobs:
         mode: app
         enable-plugins: pyside6
         include-package: |
-          sounddevice
+          esptool
           PySide6.QtOpenGL
         product-name: ESP Upload Tool
         product-version: 1.0.0
