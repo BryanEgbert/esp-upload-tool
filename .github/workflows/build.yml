@@ -3,6 +3,8 @@ name: Build with Nuitka
 on:
   push:
     branches: [ main, master ]
+    paths:
+      - '**.py'
 
 jobs:
   build:
