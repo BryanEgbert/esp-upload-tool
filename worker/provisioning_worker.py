@@ -2,7 +2,11 @@ from PySide6.QtCore import QThread, Signal
 from dataclasses import dataclass, field
 import os
 from typing import Optional
-from utils.subprocess_runner import SubprocessRunner
+import esptool.cmds
+import espefuse
+import espsecure
+from esptool.logger import log, EsptoolLogger
+from utils.signal_logger import SignalLogger
 from utils.config_manager import ConfigManager
 
 
@@ -59,6 +63,10 @@ class ProvisioningWorker(QThread):
         self._temp_files: list[str] = []
 
     def run(self):
+        # Set the custom logger to capture esptool/espefuse/espsecure output
+        SignalLogger._handler = self.log_message
+        log.set_logger(SignalLogger())
+        
         try:
             os.makedirs(self.work_dir, exist_ok=True)
 
@@ -106,6 +114,10 @@ class ProvisioningWorker(QThread):
 
         except Exception as e:
             self.finished.emit(False, str(e))
+        finally:
+            # Restore the default EsptoolLogger class
+            log.__class__ = EsptoolLogger
+            SignalLogger._handler = None
 
     # -------------------------------------------------------------------------
     # Key Management
@@ -128,9 +140,9 @@ class ProvisioningWorker(QThread):
 
         self.log_message.emit("Generating new Flash Encryption key...")
         key_size = 512 if "s3" in self.chip_info.chip_type.lower() else 256
-        cmd = ["espsecure", "generate-flash-encryption-key", "--keylen", str(key_size), self.fe_key_path]
-        if SubprocessRunner.run_command(cmd, self.log_message.emit) != 0:
-            raise RuntimeError("Failed to generate flash encryption key")
+        
+        with open(self.fe_key_path, "wb") as f:
+            espsecure.generate_flash_encryption_key(key_size, f)
 
         if not self.is_factory_mode:
             perm_path = os.path.join(self.work_dir, f"proto_fe_key_{self.chip_info.chip_type}.bin")
@@ -157,9 +169,7 @@ class ProvisioningWorker(QThread):
                 return persistent_path
 
         self.log_message.emit("Generating new Secure Boot signing key...")
-        cmd = ["espsecure", "generate-signing-key", "--version", "2", self.sb_key_path]
-        if SubprocessRunner.run_command(cmd, self.log_message.emit) != 0:
-            raise RuntimeError("Failed to generate secure boot signing key")
+        espsecure.generate_signing_key("2", None, self.sb_key_path)
 
         if not self.is_factory_mode:
             perm_path = os.path.join(self.work_dir, f"proto_sb_key_{self.chip_info.chip_type}.pem")
@@ -176,47 +186,45 @@ class ProvisioningWorker(QThread):
 
     def burn_encryption_key(self, key_path: str):
         self.status_update.emit("Burning Encryption Key...")
-        key_size = 512 if "s3" in self.chip_info.chip_type.lower() else 256
-        key_type = "XTS_AES_256_KEY" if key_size == 512 else "XTS_AES_128_KEY"
-        cmd = [
-            "espefuse", "--chip", self.chip_info.chip_type, "--port", self.port,
-            "--do-not-confirm", "burn-key", "BLOCK_KEY0", key_path, key_type
-        ]
-        if self.virtual:
-            cmd.insert(1, "--virt")
-        if SubprocessRunner.run_command(cmd, self.log_message.emit) != 0:
-            raise RuntimeError("Failed to burn encryption key")
+        chip = self.chip_info.chip_type.lower()
+        
+        with espefuse.init_commands(port=self.port, chip=chip, virt=self.virtual, do_not_confirm=True) as efuses:
+            with open(key_path, "rb") as f:
+                if chip == "esp32":
+                    # Legacy ESP32: uses BLOCK1, signature: burn_key(blocks, keyfiles)
+                    efuses.burn_key(["BLOCK1"], [f])
+                else:
+                    # Newer chips (S2, S3, C3, etc.): uses BLOCK_KEY0, needs key purpose
+                    # Determine key type based on key file size (64 bytes = 512 bits)
+                    f.seek(0, os.SEEK_END)
+                    size = f.tell()
+                    f.seek(0)
+                    key_type = "XTS_AES_256_KEY" if size == 64 else "XTS_AES_128_KEY"
+                    efuses.burn_key(["BLOCK_KEY0"], [f], [key_type])
 
     def enable_flash_encryption_efuse(self):
         self.status_update.emit("Enabling Flash Encryption eFuse...")
-        cmd = [
-            "espefuse", "--chip", self.chip_info.chip_type, "--port", self.port,
-            "--do-not-confirm", "burn-efuse", "SPI_BOOT_CRYPT_CNT", "1"
-        ]
-        if self.virtual:
-            cmd.insert(1, "--virt")
-        if SubprocessRunner.run_command(cmd, self.log_message.emit) != 0:
-            raise RuntimeError("Failed to enable flash encryption eFuse")
+        chip = self.chip_info.chip_type.lower()
+        with espefuse.init_commands(port=self.port, chip=chip, virt=self.virtual, do_not_confirm=True) as efuses:
+            if chip == "esp32":
+                efuses.burn_efuse({"FLASH_CRYPT_CNT": "1"})
+            else:
+                efuses.burn_efuse({"SPI_BOOT_CRYPT_CNT": "1"})
 
     def setup_secure_boot(self, key_path: str):
         self.status_update.emit("Setting up Secure Boot...")
-        cmd = [
-            "espefuse", "--chip", self.chip_info.chip_type, "--port", self.port,
-            "--do-not-confirm", "burn-key-digest", "BLOCK_KEY2", key_path, "SECURE_BOOT_DIGEST0"
-        ]
-        if self.virtual:
-            cmd.insert(1, "--virt")
-        if SubprocessRunner.run_command(cmd, self.log_message.emit) != 0:
-            raise RuntimeError("Failed to burn secure boot key digest")
-
-        cmd = [
-            "espefuse", "--chip", self.chip_info.chip_type, "--port", self.port,
-            "--do-not-confirm", "burn-efuse", "SECURE_BOOT_EN"
-        ]
-        if self.virtual:
-            cmd.insert(1, "--virt")
-        if SubprocessRunner.run_command(cmd, self.log_message.emit) != 0:
-            raise RuntimeError("Failed to enable secure boot eFuse")
+        chip = self.chip_info.chip_type.lower()
+        
+        with espefuse.init_commands(port=self.port, chip=chip, virt=self.virtual, do_not_confirm=True) as efuses:
+            with open(key_path, "rb") as f:
+                if chip == "esp32":
+                    # Legacy ESP32: signature: burn_key_digest(keyfile)
+                    efuses.burn_key_digest(f)
+                    efuses.burn_efuse({"ABS_DONE_1": "1"})
+                else:
+                    # Newer chips: use BLOCK_KEY2 (standard choice) with digest purpose
+                    efuses.burn_key_digest(["BLOCK_KEY2"], [f], ["SECURE_BOOT_DIGEST0"])
+                    efuses.burn_efuse({"SECURE_BOOT_EN": "1"})
 
     # -------------------------------------------------------------------------
     # Per-file Sign + Encrypt + Flash
@@ -243,14 +251,19 @@ class ProvisioningWorker(QThread):
                 signed_path = os.path.join(self.work_dir, f"{base_name}_signed.bin")
                 self._temp_files.append(signed_path)
                 self.log_message.emit(f"  Signing {os.path.basename(current)}...")
-                cmd = [
-                    "espsecure", "sign-data", "--version", "2",
-                    "--keyfile", sb_key,
-                    "--output", signed_path,
-                    current
-                ]
-                if SubprocessRunner.run_command(cmd, self.log_message.emit) != 0:
-                    raise RuntimeError(f"Failed to sign {file_path}")
+                
+                with open(sb_key, "rb") as kf, open(current, "rb") as df:
+                    espsecure.sign_data(
+                        version="2",
+                        keyfile=[kf],
+                        output=signed_path,
+                        append_signatures=False,
+                        hsm=False,
+                        hsm_config=None,
+                        pub_key=[],
+                        signature=[],
+                        datafile=df
+                    )
                 current = signed_path
 
             # -- Encrypt --
@@ -258,69 +271,65 @@ class ProvisioningWorker(QThread):
                 encrypted_path = os.path.join(self.work_dir, f"{base_name}_enc.bin")
                 self._temp_files.append(encrypted_path)
                 self.log_message.emit(f"  Encrypting {os.path.basename(current)} at {address}...")
-                cmd = [
-                    "espsecure", "encrypt-flash-data", "--aes-xts",
-                    "--keyfile", fe_key,
-                    "--address", address,
-                    "--output", encrypted_path,
-                    current
-                ]
-                if SubprocessRunner.run_command(cmd, self.log_message.emit) != 0:
-                    raise RuntimeError(f"Failed to encrypt {file_path}")
+                
+                with open(fe_key, "rb") as kf, open(current, "rb") as pf, open(encrypted_path, "wb") as of:
+                    espsecure.encrypt_flash_data(
+                        keyfile=kf,
+                        output=of,
+                        address=int(address, 0),
+                        flash_crypt_conf=0xF,
+                        aes_xts=True,
+                        plaintext_file=pf
+                    )
                 current = encrypted_path
 
             processed.append((address, current))
 
         # -- Single write-flash call with all files --
         self.status_update.emit("Flashing all files...")
-        cmd = [
-            "esptool",
-            "--before", "default-reset",
-            "--after", "hard-reset",
-            "--no-stub",
-            "--chip", self.chip_info.chip_type,
-            "--port", self.port,
-            "--baud", "115200",
-            "write-flash",
-            "-u",
-            "--flash-mode", "keep",
-            "--flash-freq", "keep",
-            "--flash-size", "detect",
-        ]
+        
+        with esptool.cmds.detect_chip(port=self.port, baud=115200) as esp:
 
-        # Append all (address, file) pairs
-        for address, file_path in processed:
-            cmd.append(address)
-            cmd.append(file_path)
-
-        if SubprocessRunner.run_command(cmd, self.log_message.emit) != 0:
-            raise RuntimeError("Failed to flash binaries")
+            addr_data = []
+            open_files = []
+            for addr, path in processed:
+                f = open(path, "rb")
+                open_files.append(f)
+                addr_data.append((int(addr, 0), f))
+            
+            try:
+                esp.connect()
+                esptool.cmds.attach_flash(esp)
+                esptool.cmds.write_flash(
+                    esp,
+                    addr_data,
+                    compress=False,
+                    flash_mode="keep",
+                    flash_freq="keep",
+                    flash_size="detect"
+                )
+                esptool.cmds.verify_flash(esp, addr_data)
+                esptool.cmds.reset_chip(esp)
+            finally:
+                for f in open_files:
+                    f.close()
 
     # -------------------------------------------------------------------------
     # Hardware Lockdown
     # -------------------------------------------------------------------------
 
     def hardware_lockdown(self):
-        if self.disable_jtag:
-            self.status_update.emit("Disabling JTAG...")
-            for efuse in ["DIS_PAD_JTAG", "DIS_USB_SERIAL_JTAG_ROM_PRINT"]:
-                cmd = [
-                    "espefuse", "--chip", self.chip_info.chip_type, "--port", self.port,
-                    "--do-not-confirm", "burn-efuse", efuse
-                ]
-                if self.virtual:
-                    cmd.insert(1, "--virt")
-                SubprocessRunner.run_command(cmd, self.log_message.emit)
+        with espefuse.init_commands(port=self.port, virt=self.virtual, do_not_confirm=True) as efuses:
+            if self.disable_jtag:
+                self.status_update.emit("Disabling JTAG...")
+                efuses.burn_efuse({
+                    "DIS_PAD_JTAG": "1",
+                    "DIS_USB_SERIAL_JTAG_ROM_PRINT": "1"
+                })
 
-        if self.disable_uart_boot:
-            self.status_update.emit("Disabling UART Download Mode...")
-            cmd = [
-                "espefuse", "--chip", self.chip_info.chip_type, "--port", self.port,
-                "--do-not-confirm", "burn-efuse", "DIS_DOWNLOAD_MODE"
-            ]
-            if self.virtual:
-                cmd.insert(1, "--virt")
-            SubprocessRunner.run_command(cmd, self.log_message.emit)
+            if self.disable_uart_boot:
+                self.status_update.emit("Disabling UART Download Mode...")
+                efuses.burn_efuse({"DIS_DOWNLOAD_MODE": "1"})
 
     # -------------------------------------------------------------------------
     # Cleanup
