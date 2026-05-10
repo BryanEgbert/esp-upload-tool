@@ -5,12 +5,13 @@ on:
     branches: [ main, master ]
     paths:
       - '**.py'
+      - '.github/workflows/build.yml'
 
 jobs:
   build:
     strategy:
       matrix:
-        os: [windows-latest, ubuntu-latest]
+        os: [ubuntu-latest, windows-latest]
 
     runs-on: ${{ matrix.os }}
 
