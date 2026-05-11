@@ -164,8 +164,9 @@ class MainWindow(QMainWindow):
 
         self.worker = ProvisioningWorker(
             port=port,
+            flash_files=config["flash_files"],
             chip_info=self.chip_info,
-            **config
+            **{k: v for k, v in config.items() if k != "flash_files"}
         )
         
         self.worker.log_message.connect(self.log_zone.append_log)
