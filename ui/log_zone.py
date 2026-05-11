@@ -6,7 +6,7 @@ from PySide6.QtCore import Qt
 
 class LogZone(QGroupBox):
     def __init__(self, parent=None):
-        super().__init__("Logs & Progress", parent)
+        super().__init__("Logs", parent)
         self.init_ui()
 
     def init_ui(self):

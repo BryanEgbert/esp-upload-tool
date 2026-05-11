@@ -9,7 +9,7 @@ class MaintenanceZone(QGroupBox):
     run_maintenance = Signal(str, dict)
 
     def __init__(self, parent=None):
-        super().__init__("Maintenance & Tools", parent)
+        super().__init__("Tools", parent)
         self.init_ui()
 
     def init_ui(self):

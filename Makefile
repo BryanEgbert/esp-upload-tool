@@ -3,6 +3,7 @@ KEY_FILE ?= private.key
 CERT_PASSWORD ?= XmjZk7Yq9Qmzo68ulRLL
 TIMESTAMP_URL ?= http://timestamp.digicert.com
 APP_URL ?= https://github.com/BryanEgbert/esp-upload-tool
+ESPTOOL_PATH=env/lib/python3.13/site-packages/esptool
 
 sign-exe:
 	@echo "Signing executable with osslsigncode..."
@@ -39,4 +40,9 @@ sign-exe:
 	}
 
 nuitka-build:
-	python -m nuitka --standalone --onefile --enable-plugin=pyside6 --include-package=esptool --include-package=PySide6.QtOpenGL main.py
+	python -m nuitka --standalone --onefile \
+		--enable-plugin=pyside6 \
+		--include-package=esptool \
+		--include-package=PySide6.QtOpenGL \
+		--include-data-dir=$(ESPTOOL_PATH)/targets/stub_flasher=esptool \
+		main.py

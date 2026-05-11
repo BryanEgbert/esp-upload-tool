@@ -163,7 +163,7 @@ class FlashFilesWidget(QWidget):
 
 class ConfigZone(QGroupBox):
     def __init__(self, parent=None):
-        super().__init__("Configuration & Operation", parent)
+        super().__init__("Configuration", parent)
         self.init_ui()
         self.load_config()
 

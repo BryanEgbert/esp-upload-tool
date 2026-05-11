@@ -47,7 +47,7 @@ class MainWindow(QMainWindow):
         self.config_zone = ConfigZone()
         provision_layout.addWidget(self.config_zone)
         
-        self.flash_btn = QPushButton("PROVISION & FLASH")
+        self.flash_btn = QPushButton("START")
         self.flash_btn.setFixedHeight(60)
         self.flash_btn.setStyleSheet("font-weight: bold; font-size: 18px; background-color: #4CAF50; color: white;")
         self.flash_btn.clicked.connect(self.start_provisioning)
@@ -69,7 +69,7 @@ class MainWindow(QMainWindow):
         maintenance_scroll.setWidget(maintenance_content)
 
         self.tabs.addTab(provision_scroll, "Provisioning")
-        self.tabs.addTab(maintenance_scroll, "Maintenance & Tools")
+        self.tabs.addTab(maintenance_scroll, "Tools")
         
         self.splitter.addWidget(self.tabs)
 

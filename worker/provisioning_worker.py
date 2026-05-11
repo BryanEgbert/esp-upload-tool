@@ -264,6 +264,19 @@ class ProvisioningWorker(QThread):
                         signature=[],
                         datafile=df
                     )
+                    self.log_message.emit("  Verifying signature...")
+                    try:
+                        espsecure.verify_signature(
+                            version=2,
+                            hsm=False,
+                            hsm_config=None,
+                            keyfile=kf,
+                            datafile=open(signed_path, "rb")
+                        )
+                    except Exception as e:
+                        self.log_message.emit(f"  Signature verification failed: {e}")
+                        raise
+                    self.log_message.emit("  Signature verified successfully.")
                 current = signed_path
 
             # -- Encrypt --
