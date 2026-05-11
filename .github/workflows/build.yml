@@ -44,6 +44,8 @@ jobs:
           espefuse
           espsecure
           PySide6.QtOpenGL
+        include-data-dir: |
+          espefuse/efuse_defs=espefuse/efuse_defs
         product-name: ESP Upload Tool
         product-version: 1.0.0
         file-version: 1.0.0
