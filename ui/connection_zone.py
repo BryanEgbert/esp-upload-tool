@@ -3,9 +3,11 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Signal, QTimer
 import serial.tools.list_ports
+import subprocess
 import re
 from typing import Optional
 from worker.provisioning_worker import ChipInfo
+from worker.discovery_worker import DiscoveryWorker
 import esptool.cmds
 from esptool.logger import log, EsptoolLogger
 from utils.signal_logger import SignalLogger
@@ -20,11 +22,12 @@ class ConnectionZone(QGroupBox):
         super().__init__("Connection & Discovery", parent)
         self.init_ui()
         self.refresh_ports()
+        self.discovery_worker: Optional[DiscoveryWorker] = None
 
     def init_ui(self):
         layout = QVBoxLayout(self)
 
-        # Port selection
+        # Port 
         port_layout = QHBoxLayout()
         self.port_combo = QComboBox()
         self.refresh_btn = QPushButton("Refresh")
@@ -104,60 +107,36 @@ class ConnectionZone(QGroupBox):
             self.discovery_failed.emit("No COM port selected")
             return
 
+        # Cancel any existing discovery
+        if self.discovery_worker and self.discovery_worker.isRunning():
+            self.discovery_worker.terminate()
+            self.discovery_worker.wait()
+
         self.discover_btn.setEnabled(False)
         self.status_label_update("Discovering...", "cyan")
 
-        output_buffer = []
-        def capture_log(msg):
-            output_buffer.append(msg)
+        self.discovery_worker = DiscoveryWorker(port)
+        self.discovery_worker.log_message.connect(self.log_message.emit)
+        self.discovery_worker.finished.connect(self.on_discovery_finished)
+        self.discovery_worker.start()
 
-        # Redirect esptool output to our local buffer
-        SignalLogger._handler = capture_log
-        log.set_logger(SignalLogger())
+    def on_discovery_finished(self, success: bool, chip_info: ChipInfo, error: str):
+        self.discover_btn.setEnabled(True)
 
-        try:
-            with esptool.cmds.detect_chip(port=port) as esp:
-                esp.connect()
-                esptool.cmds.attach_flash(esp)
-                esptool.cmds.flash_id(esp)
-                esptool.cmds.read_mac(esp)
-                esptool.cmds.get_security_info(esp)
-                
-                clean_output = "\n".join(output_buffer)
-                self.log_message.emit(clean_output)
-                
-                flash_match = re.search(r"Detected flash size: (\d+\w+)", clean_output)
-                mac_match = re.search(r"MAC:\s+([\w:]+)", clean_output)
+        if success and chip_info:
+            self.chip_label.setText(chip_info.chip_type.upper())
+            self.flash_label.setText(chip_info.flash_size)
+            self.mac_label.setText(chip_info.mac_address)
 
-                # Normalize chip type for esptool commands (e.g. ESP32-S3 -> esp32s3)
-                chip_type_cmd = esp.CHIP_NAME.lower().replace("-", "").replace(" ", "")
-                
-                flash_size = flash_match.group(1).strip() if flash_match else "Unknown"
-                mac_addr = mac_match.group(1).strip() if mac_match else "Unknown"
+            if chip_info.chip_type == "Unknown":
+                self.status_label_update("Partial Detection", "orange")
+            else:
+                self.status_label_update("Ready", "#90EE90")
 
-                self.chip_label.setText(esp.CHIP_NAME)
-                self.flash_label.setText(flash_size)
-                self.mac_label.setText(mac_addr)
-
-                if esp.CHIP_NAME == "Unknown":
-                     self.status_label_update("Partial Detection", "orange")
-                else:
-                     self.status_label_update("Ready", "#90EE90") # Light Green
-
-                chip_info = ChipInfo(chip_type_cmd, flash_size, mac_addr)
-                self.hardware_discovered.emit(chip_info)
-
-        except Exception as e:
-            self.status_label_update("Error", "#FF6B6B") # Light Red
-            clean_output = "\n".join(output_buffer)
-            if clean_output:
-                self.log_message.emit("Capture before failure:\n" + clean_output)
-            self.discovery_failed.emit(f"Error during discovery: {str(e)}")
-        finally:
-            # Restore logger
-            log.__class__ = EsptoolLogger
-            SignalLogger._handler = None
-            self.discover_btn.setEnabled(True)
+            self.hardware_discovered.emit(chip_info)
+        else:
+            self.status_label_update("Error", "#FF6B6B")
+            self.discovery_failed.emit(f"Error during discovery: {error}")
 
     def status_label_update(self, text: str, color: str = "white"):
         self.status_label.setText(text)

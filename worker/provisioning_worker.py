@@ -113,7 +113,8 @@ class ProvisioningWorker(QThread):
                 self.finished.emit(True, "Provisioning Completed Successfully")
 
         except Exception as e:
-            self.finished.emit(False, str(e))
+            error_msg = str(e)
+            self.finished.emit(False, error_msg)
         finally:
             # Restore the default EsptoolLogger class
             log.__class__ = EsptoolLogger
@@ -140,9 +141,10 @@ class ProvisioningWorker(QThread):
 
         self.log_message.emit("Generating new Flash Encryption key...")
         key_size = 512 if "s3" in self.chip_info.chip_type.lower() else 256
-        
+
         with open(self.fe_key_path, "wb") as f:
-            espsecure.generate_flash_encryption_key(key_size, f)
+            # espsecure.generate_flash_encryption_key()
+            f.write(os.urandom(key_size // 8))
 
         if not self.is_factory_mode:
             perm_path = os.path.join(self.work_dir, f"proto_fe_key_{self.chip_info.chip_type}.bin")

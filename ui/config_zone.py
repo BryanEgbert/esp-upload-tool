@@ -235,7 +235,7 @@ class ConfigZone(QGroupBox):
         exec_layout = QHBoxLayout(exec_group)
         self.normal_exec_rb = QRadioButton("Normal Mode")
         self.virtual_exec_rb = QRadioButton("Virtual Mode (Simulate eFuse)")
-        self.skip_efuse_exec_rb = QRadioButton("Skip eFuse Burning")
+        self.skip_efuse_exec_rb = QRadioButton("Flash File Only")
         self.normal_exec_rb.setChecked(True)
         
         exec_layout.addWidget(self.normal_exec_rb)
