@@ -46,7 +46,7 @@ jobs:
         product-version: 1.0.0
         file-version: 1.0.0
         file-description: ESP Upload Tool
-        windows-console-mode: disable
+        windows-console-mode: force
 
     - name: Upload Artifacts
       uses: actions/upload-artifact@v7
