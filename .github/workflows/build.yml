@@ -34,7 +34,7 @@ jobs:
 
     - name: Copy espefuse data files
       run: |
-        python -c "import espefuse, shutil, os; src = os.path.join(os.path.dirname(espefuse.__file__), 'efuse_defs'); shutil.copytree(src, 'espefuse_efuse_defs')"
+        python -c "import espefuse, shutil, os; src = os.path.dirname(espefuse.__file__); shutil.copytree(src, 'espefuse')"
 
     - name: Build Executable
       uses: Nuitka/Nuitka-Action@main
@@ -49,7 +49,7 @@ jobs:
           espsecure
           PySide6.QtOpenGL
         include-data-dir: |
-          espefuse_efuse_defs=espefuse/efuse_defs
+          espefuse=espefuse
         product-name: ESP Upload Tool
         product-version: 1.0.0
         file-version: 1.0.0
