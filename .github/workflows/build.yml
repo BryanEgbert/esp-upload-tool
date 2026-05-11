@@ -41,6 +41,8 @@ jobs:
         enable-plugins: pyside6
         include-package: |
           esptool
+          espefuse
+          espsecure
           PySide6.QtOpenGL
         product-name: ESP Upload Tool
         product-version: 1.0.0
