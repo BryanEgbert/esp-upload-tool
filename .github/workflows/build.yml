@@ -32,9 +32,10 @@ jobs:
       run: |
         pip install -r requirements.txt
 
-    - name: Copy espefuse data files
+    - name: Copy espefuse and esptool data files
       run: |
         python -c "import espefuse, shutil, os; src = os.path.dirname(espefuse.__file__); shutil.copytree(src, 'espefuse')"
+        python -c "import esptool, shutil, os; src = os.path.dirname(esptool.__file__); shutil.copytree(src, 'esptool')"
 
     - name: Build Executable
       uses: Nuitka/Nuitka-Action@main
@@ -47,9 +48,13 @@ jobs:
           esptool
           espefuse
           espsecure
+          bitstring
+          bitarray
           PySide6.QtOpenGL
         include-data-dir: |
           espefuse=espefuse
+          esptool=esptool
+
         product-name: ESP Upload Tool
         product-version: 1.0.0
         file-version: 1.0.0
