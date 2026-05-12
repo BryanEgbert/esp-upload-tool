@@ -36,6 +36,8 @@ jobs:
       run: |
         python -c "import espefuse, shutil, os; src = os.path.dirname(espefuse.__file__); shutil.copytree(src, 'espefuse')"
         python -c "import esptool, shutil, os; src = os.path.dirname(esptool.__file__); shutil.copytree(src, 'esptool')"
+        python -c "import bitstring, shutil, os; src = os.path.dirname(bitstring.__file__); shutil.copytree(src, 'bitstring')"
+
 
     - name: Build Executable
       uses: Nuitka/Nuitka-Action@main
@@ -54,6 +56,7 @@ jobs:
         include-data-dir: |
           espefuse=espefuse
           esptool=esptool
+          bitstring=bitstring
 
         product-name: ESP Upload Tool
         product-version: 1.0.0
