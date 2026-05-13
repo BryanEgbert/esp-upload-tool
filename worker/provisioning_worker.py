@@ -1,6 +1,7 @@
 from PySide6.QtCore import QThread, Signal
 from dataclasses import dataclass, field
 import os
+import traceback
 from typing import Optional
 import esptool.cmds
 import espefuse
@@ -114,7 +115,8 @@ class ProvisioningWorker(QThread):
 
         except Exception as e:
             error_msg = str(e)
-            self.finished.emit(False, error_msg)
+            error_traceback = traceback.format_exc()
+            self.finished.emit(False, f"{error_msg}\n\nTraceback:\n{error_traceback}")
         finally:
             # Restore the default EsptoolLogger class
             log.__class__ = EsptoolLogger

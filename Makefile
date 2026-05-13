@@ -44,5 +44,6 @@ nuitka-build:
 		--enable-plugin=pyside6 \
 		--include-package=esptool \
 		--include-package=PySide6.QtOpenGL \
-		--include-data-dir=$(ESPTOOL_PATH)/targets/stub_flasher=esptool \
+		--include-package=bitstring \
+ 		--include-data-dir=$(ESPTOOL_PATH)/targets/stub_flasher=esptool --report=report.xml \
 		main.py
