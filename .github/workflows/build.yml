@@ -36,7 +36,6 @@ jobs:
       run: |
         python -c "import espefuse, shutil, os; src = os.path.dirname(espefuse.__file__); shutil.copytree(src, 'espefuse')"
         python -c "import esptool, shutil, os; src = os.path.dirname(esptool.__file__); shutil.copytree(src, 'esptool')"
-        python -c "import bitstring, shutil, os; src = os.path.dirname(bitstring.__file__); shutil.copytree(src, 'bitstring')"
 
 
     - name: Build Executable
@@ -56,9 +55,6 @@ jobs:
         include-data-dir: |
           espefuse=espefuse
           esptool=esptool
-          bitstring=bitstring
-        no-deployment-flag: |
-          excluded-module-usage
         product-name: ESP Upload Tool
         product-version: 1.0.0
         file-version: 1.0.0

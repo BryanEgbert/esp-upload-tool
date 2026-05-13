@@ -336,17 +336,18 @@ class ProvisioningWorker(QThread):
     # -------------------------------------------------------------------------
 
     def hardware_lockdown(self):
-        with espefuse.init_commands(port=self.port, virt=self.virtual, do_not_confirm=True) as efuses:
+        chip = self.chip_info.chip_type.lower()
+        with espefuse.init_commands(port=self.port, chip=chip, virt=self.virtual, do_not_confirm=True) as efuses:
             if self.disable_jtag:
                 self.status_update.emit("Disabling JTAG...")
                 efuses.burn_efuse({
-                    "DIS_PAD_JTAG": "1",
-                    "DIS_USB_SERIAL_JTAG_ROM_PRINT": "1"
+                    "DIS_PAD_JTAG": 1,
+                    "DIS_USB_SERIAL_JTAG_ROM_PRINT": 1
                 })
 
             if self.disable_uart_boot:
                 self.status_update.emit("Disabling UART Download Mode...")
-                efuses.burn_efuse({"DIS_DOWNLOAD_MODE": "1"})
+                efuses.burn_efuse({"DIS_DOWNLOAD_MODE": 1})
 
     # -------------------------------------------------------------------------
     # Cleanup
