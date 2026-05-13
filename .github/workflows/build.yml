@@ -57,9 +57,8 @@ jobs:
           espefuse=espefuse
           esptool=esptool
           bitstring=bitstring
-        nofollow-import-to: |
-          bitstring
-          
+        no-deployment-flag: |
+          excluded-module-usage
         product-name: ESP Upload Tool
         product-version: 1.0.0
         file-version: 1.0.0
