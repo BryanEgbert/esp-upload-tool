@@ -321,9 +321,13 @@ class ProvisioningWorker(QThread):
                     esp,
                     addr_data,
                     compress=False,
+                    no_compress=True,
+                    force=self.enable_secure_boot or self.enable_flash_encryption,
                     flash_mode="keep",
                     flash_freq="keep",
-                    flash_size="detect"
+                    flash_size="detect",
+                    encrypt=False,
+                    encrypt_files=None,
                 )
                 esptool.cmds.verify_flash(esp, addr_data)
                 esptool.cmds.reset_chip(esp)
